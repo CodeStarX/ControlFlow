@@ -361,8 +361,8 @@ The `Dispatcher` class serves as a utility to execute asynchronous actions, mana
   },
   // Condition to check if continuation or breaking is required based on the result
   { result ->
-    // Evaluate the result and return a Pair<Boolean, Throwable?>
-    // Return true with a null/absent error for continuation or false with an error for breaking
+     // Define conditions for rollback continuation or breaking
+     // Return ConditionData(status = ... , throwable = ... )
   }
 )
   ```
@@ -388,8 +388,8 @@ The `Dispatcher` class serves as a utility to execute asynchronous actions, mana
       { flowAction() },
       // Condition to check if continuation or breaking is required based on the Flow's result
       { result ->
-          // Evaluate the result and return a Pair<Boolean, Throwable?>
-          // Return true with a null/absent error for continuation or false with an error for breaking
+          // Define conditions for rollback continuation or breaking
+          // Return ConditionData(status = ... , throwable = ... )
       }
   )
   ```
@@ -404,8 +404,8 @@ The `Dispatcher` class serves as a utility to execute asynchronous actions, mana
       { syncAction() },
       // Condition to check if continuation or breaking is required based on the action's result
       { result ->
-          // Evaluate the result and return a Pair<Boolean, Throwable?>
-          // Return true with a null/absent error for continuation or false with an error for breaking
+          // Define conditions for rollback continuation or breaking
+          // Return ConditionData(status = ... , throwable = ... )
       }
   )
   ```
