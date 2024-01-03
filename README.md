@@ -17,7 +17,7 @@ Explore the implementation of the controlflow library through the code samples a
 To include ControlFlow in your Android project, add the following dependency to your app's `build.gradle` file:
 
 ```kotlin
-implementation("io.github.codestarx:control-flow:1.0.0-alpha08")
+implementation("io.github.codestarx:control-flow:1.0.0-alpha09")
 
 repositories {
   //..
@@ -178,6 +178,32 @@ class Task : Dispatcher(), TaskProcessor {
   }
 
 ```
+### Activate The Retry Mechanism For Each Task
+
+To activate the Retry mechanism for each task, set the `count` to define the number of retries in case of failure. 
+Additionally, assign specific `causes`, a list of errors, to trigger retries upon encountering these errors. 
+Adjust the `delay` value to determine the interval between each retry attempt.
+
+Example:
+
+```kotlin
+class Task : Dispatcher(), TaskProcessor {
+  get() = TaskInfo().apply {
+    index = 0
+    name = Task::class.java.name
+    retry = RetryStrategy().apply {
+      count = 2
+      causes = setOf(TimeoutException::class,AnotherException::class,...)
+      delay = 1000L
+    }
+    runIn = Dispatchers.IO
+  }
+
+  override suspend fun doProcess(param: Any?): Flow<TaskStatus> {
+    ...
+  }
+
+```
 
 ### Attributes Of Each Rollback Task
 
@@ -212,6 +238,40 @@ class Task : Dispatcher(), RollbackTaskProcessor {
 
 ```
 
+### Activate The Retry Mechanism For Each Rollback Task
+
+To activate the Retry mechanism for each rollback task, set the `count` to define the number of retries in case of failure.
+Additionally, assign specific `causes`, a list of errors, to trigger retries upon encountering these errors.
+Adjust the `delay` value to determine the interval between each retry attempt.
+
+Example:
+
+```kotlin
+class Task : Dispatcher(), RollbackTaskProcessor {
+  override val info: TaskInfo
+    get() = ...
+
+  override val rollbackInfo: RollbackInfo
+    get() = RollbackInfo().apply {
+      index = 0
+      name = Task::class.java.name
+      retry = RetryStrategy().apply {
+        count = 2
+        causes = setOf(TimeoutException::class,AnotherException::class,...)
+        delay = 1000L
+      }
+      runIn = Dispatchers.IO
+    }
+
+  override suspend fun doProcess(param: Any?): Flow<TaskStatus> {
+    ...
+  }
+
+  override suspend fun doRollbackProcess(): Flow<TaskStatus> {
+    ...
+  }
+
+```
 
 ## ControlFlow Class
 `ControlFlow` manages the execution sequence of tasks and potential rollback actions.

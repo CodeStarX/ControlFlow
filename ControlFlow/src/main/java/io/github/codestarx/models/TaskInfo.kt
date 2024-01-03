@@ -7,5 +7,6 @@ import kotlin.coroutines.CoroutineContext
  open class TaskInfo {
      var index: Int? = null
      var name: String? = null
+     var retry: RetryStrategy? = null
      var runIn: CoroutineContext = Dispatchers.Default
  }

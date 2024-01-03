@@ -16,10 +16,9 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
 
-
 typealias Action = (onContinuation: (Any) -> Unit, onFailure: (Throwable) -> Unit) -> Unit
 typealias ActionUnit = (onContinuation: () -> Unit,onFailure: (Throwable) -> Unit) -> Unit
-
+const val THROWABLE_DEFAULT_MESSAGE = "You haven't utilized Throwable for This Task. By default, this message is set, but for optimal performance, it's advisable to specifically define the throwable value in relation to the Task."
 @Keep
 abstract class Dispatcher: ViewModel() {
 
@@ -64,10 +63,7 @@ abstract class Dispatcher: ViewModel() {
             }
             emit(value = result)
         }catch (throwable: Throwable){
-//            if(BuildConfig.DEBUG)
-            print(throwable.message)
-
-            emit(value = TaskStatus.Error(throwable))
+            throw throwable
         }
     }
 
@@ -99,7 +95,8 @@ abstract class Dispatcher: ViewModel() {
                             continuation.resume(value = TaskStatus.DoneSuccessfully(result = it))
                         }
                         else -> {
-                            continuation.resume(value = TaskStatus.Error(error = result.throwable))
+                            continuation.resumeWithException(result.throwable ?: Throwable(THROWABLE_DEFAULT_MESSAGE)
+                            )
                         }
                     }
                 },{
@@ -108,10 +105,7 @@ abstract class Dispatcher: ViewModel() {
             }
             emit(value = result)
         }catch (throwable: Throwable){
-//            if(BuildConfig.DEBUG)
-                print(throwable.message)
-
-            emit(value = TaskStatus.Error(throwable))
+            throw throwable
         }
     }
 
@@ -143,7 +137,8 @@ abstract class Dispatcher: ViewModel() {
                             continuation.resume(value = TaskStatus.DoneSuccessfully(result = transformer.invoke(it).data))
                         }
                         else -> {
-                            continuation.resume(value = TaskStatus.Error(error = result.throwable))
+                            continuation.resumeWithException(result.throwable ?: Throwable(THROWABLE_DEFAULT_MESSAGE)
+                            )
                         }
                     }
                 },{
@@ -152,10 +147,7 @@ abstract class Dispatcher: ViewModel() {
             }
             emit(value = result)
         }catch (throwable: Throwable){
-//            if(BuildConfig.DEBUG)
-            print(throwable.message)
-
-            emit(value = TaskStatus.Error(throwable))
+            throw throwable
         }
     }
 
@@ -187,10 +179,7 @@ abstract class Dispatcher: ViewModel() {
             }
             emit(value = result)
         }catch (throwable: Throwable){
-//            if(BuildConfig.DEBUG)
-                  print(throwable.message)
-
-            emit(value = TaskStatus.Error(throwable))
+           throw throwable
         }
     }
 
@@ -218,10 +207,7 @@ abstract class Dispatcher: ViewModel() {
             }
             emit(value = result)
         }catch (throwable: Throwable){
-//            if(BuildConfig.DEBUG)
-                print(throwable.message)
-
-            emit(value = TaskStatus.Error(throwable))
+           throw throwable
         }
     }
 
@@ -249,10 +235,7 @@ abstract class Dispatcher: ViewModel() {
                 result = value
             }
         }catch (throwable: Throwable) {
-//            if(BuildConfig.DEBUG)
-                print(throwable.message)
-
-            emit(value = TaskStatus.Error(throwable))
+             throw throwable
         }
         finally {
             if(result != null){
@@ -262,7 +245,7 @@ abstract class Dispatcher: ViewModel() {
                         emit(value = TaskStatus.DoneSuccessfully(result = result))
                     }
                     else -> {
-                        emit(value = TaskStatus.Error(error = conResult.throwable))
+                        throw conResult.throwable ?: Throwable(THROWABLE_DEFAULT_MESSAGE)
                     }
                 }
             }
@@ -297,8 +280,7 @@ abstract class Dispatcher: ViewModel() {
                 result = value
             }
         }catch (throwable: Throwable) {
-            print(throwable.message)
-            emit(value = TaskStatus.Error(throwable))
+            throw throwable
         }
         finally {
             if(result != null){
@@ -308,7 +290,8 @@ abstract class Dispatcher: ViewModel() {
                         emit(value = TaskStatus.DoneSuccessfully(result = transformer.invoke(result!!).data))
                     }
                     else -> {
-                        emit(value = TaskStatus.Error(error = conResult.throwable))
+                        throw conResult.throwable ?:
+                               Throwable(THROWABLE_DEFAULT_MESSAGE)
                     }
                 }
             }
@@ -340,8 +323,7 @@ abstract class Dispatcher: ViewModel() {
                 result = value
             }
         }catch (throwable: Throwable) {
-            print(throwable.message)
-            emit(value = TaskStatus.Error(throwable))
+          throw throwable
         }
         finally {
             if(result != null){
@@ -372,10 +354,7 @@ abstract class Dispatcher: ViewModel() {
                 result = value
             }
         }catch (throwable: Throwable) {
-//            if(BuildConfig.DEBUG)
-                print(throwable.message)
-
-            emit(value = TaskStatus.Error(throwable))
+            throw throwable
         }
         finally {
             if(result != null){
@@ -407,10 +386,7 @@ abstract class Dispatcher: ViewModel() {
             result = action.invoke()
 
         }catch (throwable: Throwable) {
-//            if(BuildConfig.DEBUG)
-                print(throwable.message)
-
-            emit(value = TaskStatus.Error(throwable))
+           throw throwable
         }
         finally {
             if(result != null){
@@ -420,7 +396,7 @@ abstract class Dispatcher: ViewModel() {
                         emit(value = TaskStatus.DoneSuccessfully(result = result))
                     }
                     else -> {
-                        emit(value = TaskStatus.Error(error = conResult.throwable))
+                        throw conResult.throwable ?: Throwable(THROWABLE_DEFAULT_MESSAGE)
                     }
                 }
             }
@@ -444,10 +420,7 @@ abstract class Dispatcher: ViewModel() {
         try {
             emit(value = TaskStatus.DoneSuccessfully(result = action.invoke()))
         }catch (throwable: Throwable) {
-//            if(BuildConfig.DEBUG)
-                print(throwable.message)
-
-            emit(value = TaskStatus.Error(throwable))
+           throw throwable
         }
     }
 
@@ -472,10 +445,7 @@ abstract class Dispatcher: ViewModel() {
         try {
             emit(value = TaskStatus.DoneSuccessfully(result = transformer.invoke(action.invoke()).data))
         }catch (throwable: Throwable) {
-//            if(BuildConfig.DEBUG)
-            print(throwable.message)
-
-            emit(value = TaskStatus.Error(throwable))
+           throw throwable
         }
     }
 

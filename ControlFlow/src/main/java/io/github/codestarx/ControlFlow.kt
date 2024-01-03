@@ -16,7 +16,9 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -117,6 +119,7 @@ class ControlFlow(
 
     private var taskResult: Any? = null
 
+    private var taskIsCurrentlyInProgress: Boolean? = null
 
     /**
      * Add the first task to the control flow sequence.
@@ -284,13 +287,52 @@ class ControlFlow(
         val taskFlow = withContext(task.info.runIn) { task.doProcess(param = taskResult) }
         taskFlow
             .onStart {
-                taskStatus(controlFlow = this@ControlFlow, taskFlow = TaskFlow().apply {
-                    taskIndex = task.info.index
-                    taskName = task.info.name },state= State.Started)
-                delay(10L)
-                taskStatus(controlFlow = this@ControlFlow,taskFlow = TaskFlow().apply {
-                    taskIndex = task.info.index
-                    taskName = task.info.name },state= State.InProgress)
+                if(taskIsCurrentlyInProgress == null){
+                    taskStatus(controlFlow = this@ControlFlow, taskFlow = TaskFlow().apply {
+                        taskIndex = task.info.index
+                        taskName = task.info.name },state= State.Started)
+                    delay(10L)
+                    taskStatus(controlFlow = this@ControlFlow,taskFlow = TaskFlow().apply {
+                        taskIndex = task.info.index
+                        taskName = task.info.name },state= State.InProgress)
+                }
+            }
+            .retryWhen { cause, attempt ->
+                val isUseRetryStrategy = task.info.retry?.count != null &&
+                     task.info.retry?.count!! > 0 &&
+                    !task.info.retry?.causes.isNullOrEmpty() &&
+                     task.info.retry?.delay != null && task.info.retry?.delay!! > 0L
+
+                when(isUseRetryStrategy) {
+                    true -> {
+                        if(task.info.retry?.count!! >= attempt+1 && task.info.retry?.causes?.contains(cause::class) == true){
+                            taskIsCurrentlyInProgress = true
+                            delay(task.info.retry?.delay!!)
+                            return@retryWhen true
+                        }else {
+                            return@retryWhen false
+                        }
+                    }
+                    false -> {
+                        return@retryWhen false
+                    }
+                }
+
+            }
+            .catch {
+                tasks.remove(element = task)
+                taskStatusTracker?.failure(controlFlow = this@ControlFlow, info = task.info, errorCause = it)
+                if(runAutomaticallyRollback.get() == true) {
+                    if (rollbackTasks.size > 0) {
+                        startRollback()
+                    }else{
+                        completed(controlFlow = this@ControlFlow)
+                    }
+                } else{
+                    completed(controlFlow = this@ControlFlow)
+                }
+                taskIsCurrentlyInProgress = null
+                taskJob.cancel()
             }
             .collect { taskStatus ->
                 handleTaskStatus(task, taskStatus)
@@ -302,17 +344,48 @@ class ControlFlow(
         val rollbackFlow = withContext(task.rollbackInfo.runIn) { task.doRollbackProcess() }
         rollbackFlow
             .onStart {
-                taskStatus(controlFlow = this@ControlFlow,taskFlow = TaskFlow().apply {
-                    taskIndex = task.rollbackInfo.index
-                    taskName = task.rollbackInfo.name
-                    isRollback = true
-                }, state = State.Started)
-                delay(10L)
-                taskStatus(controlFlow = this@ControlFlow,taskFlow = TaskFlow().apply {
-                    taskIndex = task.rollbackInfo.index
-                    taskName = task.rollbackInfo.name
-                    isRollback = true
-                }, state = State.InProgress)
+                if(taskIsCurrentlyInProgress == null){
+                    taskStatus(controlFlow = this@ControlFlow,taskFlow = TaskFlow().apply {
+                        taskIndex = task.rollbackInfo.index
+                        taskName = task.rollbackInfo.name
+                        isRollback = true
+                    }, state = State.Started)
+                    delay(10L)
+                    taskStatus(controlFlow = this@ControlFlow,taskFlow = TaskFlow().apply {
+                        taskIndex = task.rollbackInfo.index
+                        taskName = task.rollbackInfo.name
+                        isRollback = true
+                    }, state = State.InProgress)
+                }
+            }
+            .retryWhen { cause, attempt ->
+                val isUseRetryStrategy = task.rollbackInfo.retry?.count != null &&
+                        task.rollbackInfo.retry?.count!! > 0 &&
+                        !task.rollbackInfo.retry?.causes.isNullOrEmpty() &&
+                        task.rollbackInfo.retry?.delay != null && task.rollbackInfo.retry?.delay!! > 0L
+
+                when(isUseRetryStrategy) {
+                    true -> {
+                        if(task.rollbackInfo.retry?.count!! >= attempt+1 && task.rollbackInfo.retry?.causes?.contains(cause::class) == true){
+                            taskIsCurrentlyInProgress = true
+                            delay(task.rollbackInfo.retry?.delay!!)
+                            return@retryWhen true
+                        }else {
+                            return@retryWhen false
+                        }
+                    }
+                    false -> {
+                        return@retryWhen false
+                    }
+                }
+
+            }
+            .catch {
+                rollbackTasks.remove(element = task)
+                rollbackStatusTracker?.failure(controlFlow = this@ControlFlow, info = task.rollbackInfo,errorCause= it)
+                completed(controlFlow = this@ControlFlow)
+                rollbackTaskJob.cancel()
+                taskIsCurrentlyInProgress = null
             }
             .collect { rollbackStatus ->
                 handleRollbackStatus(task, rollbackStatus)
@@ -331,22 +404,9 @@ class ControlFlow(
                     originalRollbackTasks.add(task)
                     rollbackTasks.add(task)
                 }
-                if(tasks.isEmpty()) { completed(controlFlow = this@ControlFlow) }
-            }
-            is TaskStatus.Error -> {
-                tasks.remove(element = task)
-                taskStatusTracker?.failure(controlFlow = this@ControlFlow, info = task.info, errorCause = taskStatus.error)
-                if(runAutomaticallyRollback.get() == true) {
-                    if (rollbackTasks.size > 0) {
-                        startRollback()
-                    }else{
-                        completed(controlFlow = this@ControlFlow)
-                    }
-                } else{
+                if(tasks.isEmpty()) {
                     completed(controlFlow = this@ControlFlow)
-                }
-                taskJob.cancel()
-
+                    taskJob.cancel()}
             }
         }
     }
@@ -359,15 +419,8 @@ class ControlFlow(
                 rollbackStatusTracker?.successful(controlFlow= this@ControlFlow, info = task.rollbackInfo, result = rollbackStatus.result)
                 if(rollbackTasks.isEmpty()) {
                     completed(controlFlow = this@ControlFlow)
+                    rollbackTaskJob.cancel()
                 }
-            }
-
-            is TaskStatus.Error -> {
-                rollbackTasks.remove(element = task)
-                rollbackTaskJob.cancel()
-                rollbackStatusTracker?.failure(controlFlow = this@ControlFlow, info = task.rollbackInfo,errorCause= rollbackStatus.error)
-                completed(controlFlow = this@ControlFlow)
-
             }
         }
 
@@ -378,6 +431,7 @@ class ControlFlow(
         tasks.clear()
         _completedTasks.clear()
         tasks.addAll(originalTasks)
+        taskIsCurrentlyInProgress = null
 
     }
 
@@ -385,5 +439,6 @@ class ControlFlow(
         rollbackTasks.clear()
         rollbackTasks.addAll(originalRollbackTasks)
         _completedRollbackTasks.clear()
+        taskIsCurrentlyInProgress = null
     }
 }

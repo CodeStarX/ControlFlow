@@ -7,6 +7,8 @@ import io.github.codestarx.models.TransformData
 import io.github.codestarx.status.TaskStatus
 import io.mockk.*
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
@@ -48,14 +50,16 @@ class DispatcherTest: BaseUnitTest() {
         }
         coEvery { conditionMock.invoke(any()) } returns ConditionData(status = false, throwable = Throwable("an error occurs during execution"))
 
-        val result = mutableListOf<TaskStatus>()
+        val result = mutableListOf<Throwable>()
        val flow = dispatcher.launchAwait(actionMock, conditionMock)
-        flow.collect {
-            result.add(it)
-        }
+        flow
+            .catch {
+                result.add(it)
+            }
+            .collect {}
 
         assert(result.size == 1)
-        assert(result.first() is TaskStatus.Error )
+        assert(result.first().message == "an error occurs during execution")
     }
 
 
@@ -215,15 +219,17 @@ class DispatcherTest: BaseUnitTest() {
         coEvery { actionMock.invoke() } returns expectedResult
         coEvery { conditionMock.invoke(any()) } returns ConditionData(status = false,throwable = Throwable("an error occurs during execution"))
 
-        val result = mutableListOf<TaskStatus>()
+        val result = mutableListOf<Throwable>()
         val flow = dispatcher.launch(actionMock, conditionMock)
-        flow.collect {
-            result.add(it)
-        }
+        flow
+            .catch {
+                result.add(it)
+            }
+            .collect()
 
         assert(result.size == 1)
-        assert(result.first() is TaskStatus.Error )
-        assert((result.first() as TaskStatus.Error ).error?.message == "an error occurs during execution")
+        assert(result.first().message == "an error occurs during execution")
+
     }
 
     @Test
@@ -235,15 +241,15 @@ class DispatcherTest: BaseUnitTest() {
             throw expectedResult
         }
 
-        val result = mutableListOf<TaskStatus>()
+        val result = mutableListOf<Throwable>()
         val flow = dispatcher.launch(actionMock)
-        flow.collect {
+        flow.catch {
             result.add(it)
-        }
+        }.collect()
 
         assert(result.size == 1)
-        assert(result.first() is TaskStatus.Error )
-        assert((result.first() as TaskStatus.Error ).error?.message == "an error occurs during execution")
+        assert(result.first().message == "an error occurs during execution")
+
     }
 
     @Test
