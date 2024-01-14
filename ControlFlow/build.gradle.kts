@@ -58,7 +58,7 @@ dependencies {
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
 }
 mavenPublishing{
-    coordinates("io.github.codestarx", "control-flow", "1.0.0-alpha09")
+    coordinates("io.github.codestarx", "control-flow", "1.0.0-alpha10")
     publishToMavenCentral(SonatypeHost.S01)
     pom {
         name.set("control-flow")
