@@ -127,9 +127,13 @@ class ControlFlow(
      */
     fun startWith(first: TaskProcessor) {
         originalTasks.clear()
-        originalTasks.add(first)
         tasks.clear()
+        originalTasks.add(first)
         tasks.add(first)
+        if(TaskProcessor.subtasks.containsKey(first.hashCode())){
+            originalTasks.addAll(TaskProcessor.subtasks[first.hashCode()] ?: mutableListOf())
+            tasks.addAll(TaskProcessor.subtasks[first.hashCode()] ?: mutableListOf())
+        }
     }
 
     /**
@@ -139,6 +143,10 @@ class ControlFlow(
     fun then(next: TaskProcessor) {
         originalTasks.add(next)
         tasks.add(next)
+        if(TaskProcessor.subtasks.containsKey(next.hashCode())){
+            originalTasks.addAll(TaskProcessor.subtasks[next.hashCode()] ?: mutableListOf())
+            tasks.addAll(TaskProcessor.subtasks[next.hashCode()] ?: mutableListOf())
+        }
     }
 
     /**
@@ -440,5 +448,14 @@ class ControlFlow(
         rollbackTasks.addAll(originalRollbackTasks)
         _completedRollbackTasks.clear()
         taskIsCurrentlyInProgress = null
+    }
+
+    fun stop() {
+        originalTasks.clear()
+        tasks.clear()
+        originalRollbackTasks.clear()
+        originalTasks.clear()
+        _completedTasks.clear()
+        _completedRollbackTasks.clear()
     }
 }
