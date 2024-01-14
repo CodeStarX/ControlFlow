@@ -7,6 +7,7 @@ Explore the implementation of the controlflow library through the code samples a
 ## Features
 
 - **Task Execution Sequencing:** Define and manage a sequence of tasks.
+- **Subtasks Execution Sequencing:** Define and manage a sequence of subtasks for each primary task.
 - **Rollback Mechanism:** Implement rollback functionalities for tasks that need to revert changes made during their execution.
 - **Error Handling:** Handle errors occurring during task execution and initiate rollback processes if required.
 - **Automated Data Forwarding:** Each task's output data type is automatically forwarded as the input for the subsequent task by default.
@@ -17,7 +18,7 @@ Explore the implementation of the controlflow library through the code samples a
 To include ControlFlow in your Android project, add the following dependency to your app's `build.gradle` file:
 
 ```kotlin
-implementation("io.github.codestarx:control-flow:1.0.0-alpha09")
+implementation("io.github.codestarx:control-flow:1.0.0-alpha10")
 
 repositories {
   //..
@@ -282,7 +283,7 @@ This class offers a structured way to manage a series of tasks and handles their
 
 Example usage:
 
-   ```kotlin
+```kotlin
     // Create a ControlFlow instance
 val controlFlow = ControlFlow(object : WorkFlowTracker {
   // Implement work Flow callback methods
@@ -305,9 +306,46 @@ controlFlow.useRollbackStatusTracker(object : RollbackStatusTracker {
 
 // Start executing tasks
 controlFlow.start()
-   ```
+```
 
-### Method Details
+### Subtasks Execution
+To incorporate subtasks for each task, you can define their implementation as outlined below:
+
+Example usage:
+
+```kotlin
+// Create a ControlFlow instance
+val controlFlow = ControlFlow(object : WorkFlowTracker {
+  // Implement work Flow callback methods
+})
+
+// Define your tasks
+controlFlow.startWith(MyTask().apply{
+  // Define your subtasks
+  then(subtask= MySubtask())
+  then(subtask= AnotherSubtask())
+})
+controlFlow.then(AnotherTask().apply{
+  // Define your subtasks
+  then(subtask= MySubtask())
+  then(subtask= AnotherSubtask())
+})
+
+// Set up TaskStatusTracker if needed
+controlFlow.useTaskStatusTracker(object : TaskStatusTracker {
+  // Implement callback methods
+})
+
+// Set up RollbackStatusTracker if needed
+controlFlow.useRollbackStatusTracker(object : RollbackStatusTracker {
+  // Implement callback methods
+})
+
+// Start executing tasks
+controlFlow.start()
+```
+
+### Control-Flow Method Details
 ```kotlin
 /**
  * Add the first task to the control flow sequence.
