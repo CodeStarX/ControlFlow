@@ -22,7 +22,8 @@ Explore the implementation of the controlflow library through the code samples a
 To include ControlFlow in your Android project, add the following dependency to your app's `build.gradle` file:
 
 ```kotlin
-implementation("io.github.codestarx:control-flow:1.0.0-alpha10")
+
+implementation("io.github.codestarx:control-flow:1.0.0-alpha11")
 
 repositories {
   //..
@@ -430,6 +431,14 @@ useTaskStatusTracker(callBack: TaskStatusTracker)
  * @param callBack The callback to be associated with the rollback task execution.
  */
 useRollbackStatusTracker( callBack: RollbackStatusTracker)
+```
+```kotlin
+/**
+ * Stops and cleans up the resources associated with the task processing system.
+ * This method sets various internal variables to null, effectively releasing
+ * the references to the task-related objects, job instances, and other components.
+ */
+fun stop()
 ```
 
 ## Dispatcher Class
