@@ -7,19 +7,24 @@ import kotlinx.coroutines.flow.Flow
 
 @Keep
 interface TaskProcessor {
+
     val info: TaskInfo
+
     suspend fun doProcess(param: Any?): Flow<TaskStatus>
+
     companion object {
-        var subtasks: MutableMap<Int, MutableList<TaskProcessor>> = mutableMapOf()
+        var subtasks: MutableMap<Int, MutableList<TaskProcessor>?>? = mutableMapOf()
     }
+
     fun then(subtask: TaskProcessor) {
         val key = this@TaskProcessor.hashCode()
-        if(!subtasks.containsKey(key)){
-            subtasks[key] = mutableListOf(subtask)
+        if(subtasks?.containsKey(key) == false){
+            subtasks!![key] = mutableListOf(subtask)
         }else {
-            val values = subtasks.getValue(key)
-            values.add(subtask)
-            subtasks[key] = values
+            val values = subtasks?.getValue(key)
+            values?.add(subtask)
+            subtasks?.set(key, values)
         }
+
     }
 }

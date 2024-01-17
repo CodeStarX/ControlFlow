@@ -62,8 +62,8 @@ import java.util.concurrent.atomic.AtomicReference
  */
 @Keep
 class ControlFlow(
-    private val workFlowTracker: WorkFlowTracker
-): ViewModel(), WorkFlowTracker by workFlowTracker {
+    private var workFlowTracker: WorkFlowTracker?
+): ViewModel() {
 
     private val handler = CoroutineExceptionHandler { _, exception ->
         // Handles exceptions that occur within coroutines
@@ -76,34 +76,34 @@ class ControlFlow(
     }
 
     // Stores the original sequence of tasks
-    private var originalTasks: MutableList<TaskProcessor> = mutableListOf()
+    private var originalTasks: MutableList<TaskProcessor>? = mutableListOf()
 
 
     // Stores the original sequence of rollback tasks
-    private var originalRollbackTasks: MutableList<RollbackTaskProcessor> = mutableListOf()
+    private var originalRollbackTasks: MutableList<RollbackTaskProcessor>? = mutableListOf()
 
     // Stores the tasks to be executed
-    private val tasks: MutableList<TaskProcessor> = mutableListOf()
+    private var tasks: MutableList<TaskProcessor>? = mutableListOf()
 
     // Stores the rollback tasks to be executed
-    private val rollbackTasks: MutableList<RollbackTaskProcessor> = mutableListOf()
+    private var rollbackTasks: MutableList<RollbackTaskProcessor>? = mutableListOf()
 
     // Stores the completed tasks during execution
-    private val _completedTasks: MutableList<TaskProcessor>  = mutableListOf()
+    private var _completedTasks: MutableList<TaskProcessor>?  = mutableListOf()
 
     // Provides access to the list of completed tasks
     val completedTasks: List<TaskProcessor>
-        get() { return _completedTasks.toList() }
+        get() { return _completedTasks?.toList() ?: listOf() }
 
     // Stores the completed rollback tasks during execution
-    private val _completedRollbackTasks: MutableList<RollbackTaskProcessor>  = mutableListOf()
+    private var _completedRollbackTasks: MutableList<RollbackTaskProcessor>?  = mutableListOf()
 
     // Provides access to the list of completed rollback tasks
     val completedRollbackTasks: List<RollbackTaskProcessor>
-        get() { return _completedRollbackTasks.toList() }
+        get() { return _completedRollbackTasks?.toList() ?: listOf() }
 
     // Tracks if the rollback should be automatically initiated
-    private var runAutomaticallyRollback: AtomicReference<Boolean> = AtomicReference(false)
+    private var runAutomaticallyRollback: AtomicReference<Boolean>? = null
 
     // Callback for the main task execution progress
     private var taskStatusTracker: TaskStatusTracker? = null
@@ -112,10 +112,10 @@ class ControlFlow(
     private var rollbackStatusTracker: RollbackStatusTracker? = null
 
     // Coroutine job for executing tasks
-    private lateinit var taskJob: Job
+    private var taskJob: Job? = null
 
     // Coroutine job for executing rollback tasks
-    private lateinit var rollbackTaskJob: Job
+    private var rollbackTaskJob: Job? = null
 
     private var taskResult: Any? = null
 
@@ -126,13 +126,13 @@ class ControlFlow(
      * @param first task to be added to the control flow sequence.
      */
     fun startWith(first: TaskProcessor) {
-        originalTasks.clear()
-        tasks.clear()
-        originalTasks.add(first)
-        tasks.add(first)
-        if(TaskProcessor.subtasks.containsKey(first.hashCode())){
-            originalTasks.addAll(TaskProcessor.subtasks[first.hashCode()] ?: mutableListOf())
-            tasks.addAll(TaskProcessor.subtasks[first.hashCode()] ?: mutableListOf())
+        originalTasks?.clear()
+        tasks?.clear()
+        originalTasks?.add(first)
+        tasks?.add(first)
+        if(TaskProcessor.subtasks?.containsKey(first.hashCode()) == true){
+            originalTasks?.addAll(TaskProcessor.subtasks!![first.hashCode()] ?: mutableListOf())
+            tasks?.addAll(TaskProcessor.subtasks!![first.hashCode()] ?: mutableListOf())
         }
     }
 
@@ -141,11 +141,11 @@ class ControlFlow(
      * @param next The subsequent task to be added to the control flow sequence.
      */
     fun then(next: TaskProcessor) {
-        originalTasks.add(next)
-        tasks.add(next)
-        if(TaskProcessor.subtasks.containsKey(next.hashCode())){
-            originalTasks.addAll(TaskProcessor.subtasks[next.hashCode()] ?: mutableListOf())
-            tasks.addAll(TaskProcessor.subtasks[next.hashCode()] ?: mutableListOf())
+        originalTasks?.add(next)
+        tasks?.add(next)
+        if(TaskProcessor.subtasks?.containsKey(next.hashCode()) == true){
+            originalTasks?.addAll(TaskProcessor.subtasks!![next.hashCode()] ?: mutableListOf())
+            tasks?.addAll(TaskProcessor.subtasks!![next.hashCode()] ?: mutableListOf())
         }
     }
 
@@ -154,20 +154,20 @@ class ControlFlow(
      * @param runAutomaticallyRollback Set to true if you want tasks to automatically rollback on failure.
      */
     fun start(runAutomaticallyRollback: Boolean = false) {
-        started(this@ControlFlow)
-        this.runAutomaticallyRollback.set(runAutomaticallyRollback)
+        workFlowTracker?.started(this@ControlFlow)
+        this.runAutomaticallyRollback?.set(runAutomaticallyRollback)
         runTasks()
     }
 
     private fun runTasks() {
         taskJob = safeLauncher {
             while (isActive) {
-                when(tasks.size > 0) {
+                when(tasks?.isNotEmpty()) {
                     true -> {
-                        executeTask(task = tasks.first())
+                        tasks?.first()?.let { executeTask(task = it) }
                     }
                     else -> {
-                        taskJob.cancel()
+                        taskJob?.cancel()
                     }
                 }
             }
@@ -181,10 +181,10 @@ class ControlFlow(
     fun startRollback() {
         rollbackTaskJob = safeLauncher {
             while (isActive) {
-                if(rollbackTasks.size > 0){
-                    executeRollback(task = rollbackTasks.last())
+                if(rollbackTasks?.isNotEmpty() == true){
+                    rollbackTasks?.last()?.let { executeRollback(task = it) }
                 }else {
-                    rollbackTaskJob.cancel()
+                    rollbackTaskJob?.cancel()
                 }
             }
         }
@@ -195,7 +195,7 @@ class ControlFlow(
      */
     fun restart() {
         reset()
-        start(runAutomaticallyRollback.get())
+        runAutomaticallyRollback?.get()?.let { start(it) }
     }
 
     /**
@@ -211,13 +211,13 @@ class ControlFlow(
      * @param taskName The name of the task from which to start the execution.
      */
     fun startFrom(taskName: String) {
-        val index = originalTasks.indexOfFirst { it.info.name == taskName }
+        val index = originalTasks?.indexOfFirst { it.info.name == taskName }
         if (index == -1) {
             // Task not found, throw an exception or handle it accordingly
             return
         }
-        setNewTask(index= index)
-        start(runAutomaticallyRollback.get())
+        setNewTask(index= index!!)
+        runAutomaticallyRollback?.let { it.get()?.let { it1 -> start(it1) } }
     }
 
     /**
@@ -225,19 +225,19 @@ class ControlFlow(
      * @param taskIndex The index of the task from which to start the execution.
      */
     fun startFrom(taskIndex: Int) {
-        val index = originalTasks.indexOfFirst { it.info.index == taskIndex }
+        val index = originalTasks?.indexOfFirst { it.info.index == taskIndex }
         if (index == -1) {
             // Task not found, throw an exception or handle it accordingly
             return
         }
-        setNewTask(index= index)
-        start(runAutomaticallyRollback.get())
+        setNewTask(index= index!!)
+        runAutomaticallyRollback?.let { it.get()?.let { it1 -> start(it1) } }
     }
 
     private fun setNewTask(index: Int) {
-        val tasksToExecute = originalTasks.subList(index, originalTasks.size)
-        tasks.clear() // Clear existing tasks
-        tasks.addAll(tasksToExecute) // Set tasks to execute from the specified task onwards
+        val tasksToExecute = originalTasks?.size?.let { originalTasks?.subList(index, it) }
+        tasks?.clear() // Clear existing tasks
+        tasksToExecute?.let { tasks?.addAll(it) } // Set tasks to execute from the specified task onwards
     }
 
     /**
@@ -245,12 +245,12 @@ class ControlFlow(
      * @param taskName The name of the task from which to start the rollback process.
      */
     fun startRollbackFrom(taskName: String) {
-        val index = originalRollbackTasks.indexOfFirst { it.info.name == taskName }
+        val index = originalRollbackTasks?.indexOfFirst { it.info.name == taskName }
         if (index == -1) {
             // Task not found, throw an exception or handle it accordingly
             return
         }
-        setNewRollbackTask(index= index)
+        setNewRollbackTask(index= index!!)
         startRollback()
     }
 
@@ -259,19 +259,20 @@ class ControlFlow(
      * @param taskIndex The index of the task from which to start the rollback process.
      */
     fun startRollbackFrom(taskIndex: Int) {
-        val index = originalRollbackTasks.indexOfFirst { it.info.index == taskIndex }
+        val index = originalRollbackTasks?.indexOfFirst { it.info.index == taskIndex }
         if (index == -1) {
             // Task not found, throw an exception or handle it accordingly
             return
         }
-        setNewRollbackTask(index= index)
+        setNewRollbackTask(index= index!!)
         startRollback()
     }
 
     private fun setNewRollbackTask(index: Int){
-        val tasksToExecute = originalRollbackTasks.subList(index, originalRollbackTasks.size)
-        rollbackTasks.clear() // Clear existing tasks
-        rollbackTasks.addAll(tasksToExecute) // Set tasks to execute from the specified task onwards
+        val tasksToExecute =
+            originalRollbackTasks?.size?.let { originalRollbackTasks?.subList(index, it) }
+        rollbackTasks?.clear() // Clear existing tasks
+        tasksToExecute?.let { rollbackTasks?.addAll(it) } // Set tasks to execute from the specified task onwards
 
     }
 
@@ -296,11 +297,11 @@ class ControlFlow(
         taskFlow
             .onStart {
                 if(taskIsCurrentlyInProgress == null){
-                    taskStatus(controlFlow = this@ControlFlow, taskFlow = TaskFlow().apply {
+                    workFlowTracker?.taskStatus(controlFlow = this@ControlFlow, taskFlow = TaskFlow().apply {
                         taskIndex = task.info.index
                         taskName = task.info.name },state= State.Started)
                     delay(10L)
-                    taskStatus(controlFlow = this@ControlFlow,taskFlow = TaskFlow().apply {
+                    workFlowTracker?.taskStatus(controlFlow = this@ControlFlow,taskFlow = TaskFlow().apply {
                         taskIndex = task.info.index
                         taskName = task.info.name },state= State.InProgress)
                 }
@@ -328,19 +329,19 @@ class ControlFlow(
 
             }
             .catch {
-                tasks.remove(element = task)
+                tasks?.remove(element = task)
                 taskStatusTracker?.failure(controlFlow = this@ControlFlow, info = task.info, errorCause = it)
-                if(runAutomaticallyRollback.get() == true) {
-                    if (rollbackTasks.size > 0) {
+                if(runAutomaticallyRollback?.get() == true) {
+                    if (rollbackTasks?.isNotEmpty() == true) {
                         startRollback()
                     }else{
-                        completed(controlFlow = this@ControlFlow)
+                        workFlowTracker?.completed(controlFlow = this@ControlFlow)
                     }
                 } else{
-                    completed(controlFlow = this@ControlFlow)
+                    workFlowTracker?.completed(controlFlow = this@ControlFlow)
                 }
                 taskIsCurrentlyInProgress = null
-                taskJob.cancel()
+                taskJob?.cancel()
             }
             .collect { taskStatus ->
                 handleTaskStatus(task, taskStatus)
@@ -353,13 +354,13 @@ class ControlFlow(
         rollbackFlow
             .onStart {
                 if(taskIsCurrentlyInProgress == null){
-                    taskStatus(controlFlow = this@ControlFlow,taskFlow = TaskFlow().apply {
+                    workFlowTracker?.taskStatus(controlFlow = this@ControlFlow,taskFlow = TaskFlow().apply {
                         taskIndex = task.rollbackInfo.index
                         taskName = task.rollbackInfo.name
                         isRollback = true
                     }, state = State.Started)
                     delay(10L)
-                    taskStatus(controlFlow = this@ControlFlow,taskFlow = TaskFlow().apply {
+                    workFlowTracker?.taskStatus(controlFlow = this@ControlFlow,taskFlow = TaskFlow().apply {
                         taskIndex = task.rollbackInfo.index
                         taskName = task.rollbackInfo.name
                         isRollback = true
@@ -389,10 +390,10 @@ class ControlFlow(
 
             }
             .catch {
-                rollbackTasks.remove(element = task)
+                rollbackTasks?.remove(element = task)
                 rollbackStatusTracker?.failure(controlFlow = this@ControlFlow, info = task.rollbackInfo,errorCause= it)
-                completed(controlFlow = this@ControlFlow)
-                rollbackTaskJob.cancel()
+                workFlowTracker?.completed(controlFlow = this@ControlFlow)
+                rollbackTaskJob?.cancel()
                 taskIsCurrentlyInProgress = null
             }
             .collect { rollbackStatus ->
@@ -404,17 +405,18 @@ class ControlFlow(
     private fun handleTaskStatus(task: TaskProcessor, taskStatus: TaskStatus) {
         when (taskStatus) {
             is TaskStatus.DoneSuccessfully<*> -> {
-                tasks.remove(element = task)
-                _completedTasks.add(task)
+                tasks?.remove(element = task)
+                _completedTasks?.add(task)
                 taskResult = taskStatus.result
                 taskStatusTracker?.successful(controlFlow = this@ControlFlow, info = task.info, result = taskStatus.result)
                 if(task is RollbackTaskProcessor) {
-                    originalRollbackTasks.add(task)
-                    rollbackTasks.add(task)
+                    originalRollbackTasks?.add(task)
+                    rollbackTasks?.add(task)
                 }
-                if(tasks.isEmpty()) {
-                    completed(controlFlow = this@ControlFlow)
-                    taskJob.cancel()}
+                if(tasks?.isEmpty() == true) {
+                    workFlowTracker?.completed(controlFlow = this@ControlFlow)
+                    taskJob?.cancel()
+                }
             }
         }
     }
@@ -422,12 +424,12 @@ class ControlFlow(
     private fun handleRollbackStatus(task: RollbackTaskProcessor, rollbackStatus: TaskStatus) {
         when (rollbackStatus) {
             is TaskStatus.DoneSuccessfully<*> -> {
-                rollbackTasks.remove(element = task)
-                _completedRollbackTasks.add(task)
+                rollbackTasks?.remove(element = task)
+                _completedRollbackTasks?.add(task)
                 rollbackStatusTracker?.successful(controlFlow= this@ControlFlow, info = task.rollbackInfo, result = rollbackStatus.result)
-                if(rollbackTasks.isEmpty()) {
-                    completed(controlFlow = this@ControlFlow)
-                    rollbackTaskJob.cancel()
+                if(rollbackTasks?.isEmpty() == true) {
+                    workFlowTracker?.completed(controlFlow = this@ControlFlow)
+                    rollbackTaskJob?.cancel()
                 }
             }
         }
@@ -435,27 +437,41 @@ class ControlFlow(
     }
 
     private fun reset(){
-        originalRollbackTasks = mutableListOf()
-        tasks.clear()
-        _completedTasks.clear()
-        tasks.addAll(originalTasks)
+        originalRollbackTasks?.clear()
+        tasks?.clear()
+        _completedTasks?.clear()
+        originalTasks?.let { tasks?.addAll(it) }
         taskIsCurrentlyInProgress = null
 
     }
 
     private fun resetRollback() {
-        rollbackTasks.clear()
-        rollbackTasks.addAll(originalRollbackTasks)
-        _completedRollbackTasks.clear()
+        rollbackTasks?.clear()
+        rollbackTasks = originalRollbackTasks
+        _completedRollbackTasks?.clear()
         taskIsCurrentlyInProgress = null
     }
 
+    /**
+     * Stops and cleans up the resources associated with the task processing system.
+     * This method sets various internal variables to null, effectively releasing
+     * the references to the task-related objects, job instances, and other components.
+     */
     fun stop() {
-        originalTasks.clear()
-        tasks.clear()
-        originalRollbackTasks.clear()
-        originalTasks.clear()
-        _completedTasks.clear()
-        _completedRollbackTasks.clear()
+        originalTasks = null
+        tasks = null
+        originalRollbackTasks = null
+        rollbackTasks = null
+        _completedTasks = null
+        _completedRollbackTasks = null
+        runAutomaticallyRollback = null
+        workFlowTracker = null
+        taskStatusTracker = null
+        rollbackStatusTracker = null
+        taskJob = null
+        rollbackTaskJob = null
+        taskResult = null
+        taskIsCurrentlyInProgress = null
+        TaskProcessor.subtasks = null
     }
 }
