@@ -58,12 +58,13 @@ dependencies {
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
 }
 mavenPublishing{
-    coordinates("io.github.codestarx", "control-flow", "1.0.0-alpha10")
+    coordinates("io.github.codestarx", "control-flow", "1.0.0-alpha11")
+
     publishToMavenCentral(SonatypeHost.S01)
     pom {
         name.set("control-flow")
         description.set("control-flow is an Android library that facilitates task sequencing, rollback actions, and error handling. It systematically oversees task execution, offering structured error handling and facilitating rollback processes for efficient management.")
-        inceptionYear.set("2023")
+        inceptionYear.set("2024")
         url.set("https://github.com/CodeStarX/ControlFlow/")
         packaging = "aar"
         licenses {
